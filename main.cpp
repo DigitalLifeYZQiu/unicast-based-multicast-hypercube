@@ -25,8 +25,8 @@ void runSimulation(double injection_rate, std::ofstream& resultsFile) {
     total_flits_delivered = 0;
     messageGenTime.clear();
 
-    int bufferSize = 10; // 每个缓冲区大小（以flit为单位）
-    int dimension=4;
+    int bufferSize = 16; // 每个缓冲区大小（以flit为单位）
+    int dimension=16;
     // 创建超立方体网络
     Hypercube cube(dimension, bufferSize * MESSLENGTH);
 
@@ -110,8 +110,8 @@ int main() {
     resultsFile << "InjectionRate AvgLatency Throughput\n";  // 文件头
 
     // 测试不同的注入率 (0.01 到 1)
-    const int num_rates = 20;
-    const double max_rate = 0.3;
+    const int num_rates = 10;
+    const double max_rate = 1.0;
 
     for (int i = 0; i <= num_rates; ++i) {
         double injection_rate = (i * max_rate) / num_rates;

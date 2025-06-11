@@ -22,8 +22,8 @@ Message* Event::generateMessage() {
     // 随机源节点
     int src = rand() % nodeCount;
     
-    // 随机选择1-10个目的节点
-    int destCount = 1 + rand() % 10;
+    // 随机选择1-4个目的节点
+    int destCount = 1 + rand() % 4;
     std::vector<int> dests;
     for (int i = 0; i < destCount; i++) {
         int dest;
@@ -43,7 +43,7 @@ void Event::forwardMessage(Message& msg) {
     NodeInfo* next = routing->forward(msg);
     if (!next) {
         msg.timeout++;
-        if (msg.timeout > 1000) {
+        if (msg.timeout > 50000) {
             msg.active = false; // 超时丢弃
         }
         return;
