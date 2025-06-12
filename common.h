@@ -1,14 +1,15 @@
-#ifndef COMMON_H
-#define COMMON_H
+#ifndef CO_MM_O1
+#define CO_MM_O1
 
-#include <vector>
+#include "Hypercube.h"
+#include "HypercubeRouting.h"
+#include "Event.h"
 #include "Message.h"
+#include <vector>
+#include <fstream>
 
-extern int GENERATETYPE;
-extern int totalcircle;
-extern int dimension; // 超立方体维度
-
-// 获取网络中活动消息数量
-int getNetworkSize(const std::vector<Message*>* messages);
+void outtotest(vector<Message*>* vecmess, Hypercube* hypercube);
+void bufferleft(Hypercube* hypercube, int dimension);
+void drain(vector<Message*>* vecmess, Hypercube* hypercube, Event* s);
 
 #endif
