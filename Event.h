@@ -1,26 +1,27 @@
 #ifndef EVENT_H
 #define EVENT_H
 
-#include "Allrouting.h"
-#include "Message.h"
 #include "Hypercube.h"
+#include "HypercubeRouting.h"
+#include "Message.h"
 #include <vector>
 
 class Event {
 public:
-    Event(Allrouting* routing);
-    ~Event();
-    
-    Message* generateMessage();
-    void forwardMessage(Message& msg);
-    int consumed;
-    double totalcir; // total circle all the messages take;
-    int messarrive; // how many message arrived
-    
+	Event(HypercubeRouting* rout1);
+	~Event();
+	
+	Message* genMes();
+	void forwardMes(Message& s);
+	
+	int consumed;
+	int totalcir;
+	int messarrive;
+	
 private:
-    Allrouting* routing;
-    Hypercube* cube;
-    int dimension;
+	HypercubeRouting* rout;
+	Hypercube* hypercube;
+	int dimension;
 };
 
 #endif
