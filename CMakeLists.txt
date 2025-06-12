@@ -1,6 +1,14 @@
-cmake_minimum_required(VERSION 3.30)
-project(unicast_based_multicast_hypercubes)
+cmake_minimum_required(VERSION 3.25)
+project(unicast-based-multicast-2Dmeshes)
 
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_executable(unicast_based_multicast_hypercubes main.cpp Buffer.cpp common.cpp Event.cpp Hypercube.cpp HypercubeNode.cpp Message.cpp RoutingHypercube.cpp)
+add_executable(Simulator
+        main.cpp
+        Event.cpp
+        Hypercube.cpp
+        HypercubeNode.cpp
+        HypercubeRouting.cpp
+        testfuc.cpp
+        )
