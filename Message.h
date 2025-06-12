@@ -1,32 +1,89 @@
-#ifndef MESSAGE_H
-#define MESSAGE_H
+/*********     
+		9/11/2007,Luo Wei.
+		The definition of message.
 
-#include "NodeInfo.h"
-#include <vector>
 
-#define MESSLENGTH 16
 
-class Message {
+
+********/
+
+#ifndef  MESS_AGE
+#define  MESS_AGE
+#define PROCESSTIME 8  // 减少处理时间
+#define TIMEOUT   100000  // 减少超时时间
+#define MESSLENGTH 16  // 减少消息长度
+#include<iostream>
+#include<string>
+#include<assert.h>
+#include"HypercubeNode.h"
+using namespace std;
+class Buffer;
+class NodeInfo;
+
+
+/************************
+  Message info    
+  ******************************/
+class Message{
 public:
-    int src;          // 源节点
-    int dst;          // 当前目的地（多播时变化）
-    std::vector<int> destinations; // 多播目的节点列表
-    int timeout;      // 超时计数器
-    int begintrans;   // 开始传输倒计时
-    bool active;      // 消息是否活跃
-    NodeInfo* routpath; // 路由路径信息（每个flit）
-    int count;        // 总耗时
-    bool releaselink; // 是否需要释放链路
-    
-    Message();
-    Message(int src, const std::vector<int>& dests);
-    ~Message();
-    
-    // 创建针对特定目的地的消息副本
-    Message* copyForDestination(int dest);
-    
-private:
-    void initialize();
+	int length ;       		// measured by flits;
+	int src;         			//The source of the message
+	int dst;
+	int timeout;   				//measured by circle ,the time limit of message waits for a channel       
+	int begintrans;  //when a message is generated ,it needs some time until transmitting,begintrans record this.
+	int step;       //how many steps this message has walked;
+	bool active; // check this message whether consumed or arrive at dst
+NodeInfo* routpath; // : the ith flit now at routpath[i].node and take routpath[i].buffer 
+	int count;// the total time a message  consumed
+  bool releaselink;  // if the tail of a message shifts , the physical link the message occupied should release.
+
+  bool turn;//  used in bubble flow control, if true, then the request escape channel need 2 buffers.
+			
+	
+
+
+	Message( ){
+		src = -1;
+		dst = -1;
+	}
+
+
+	Message(int src1, int dst1){
+		begintrans = PROCESSTIME;
+		src = src1;
+		dst = dst1;
+		routpath = new NodeInfo[MESSLENGTH];
+		assert(routpath);
+		for(int i = 0 ; i < MESSLENGTH; i++){
+			routpath[i].node = src;
+			routpath[i].channel = 0;
+			routpath[i].buff = NULL;
+			
+		}
+		step = 0;
+		active = true;
+		length = MESSLENGTH;
+		count = 0;
+		releaselink = false;
+		turn = true;
+		timeout = 0;
+	
+	}
+
+	 ~Message(){
+ 	delete []routpath;
+}
+
+
+	void setLength(int n)
+	{
+		length = n;
+	}
+
 };
+
+
+
+
 
 #endif
