@@ -1,39 +1,38 @@
 #include "Hypercube.h"
 #include <cmath>
 
-Hypercube::Hypercube(int dim, int bufferSize) 
-    : dimension(dim), nodeCount(1 << dim) {
+Hypercube::Hypercube(int _dimension, int buff1, int buff2) {
+    dimension = _dimension;
+    nodeCount = 1 << dimension;  // 2^dimension
+    nodes = new HypercubeNode*[nodeCount];
     
-    nodes.reserve(nodeCount);
-    
-    // 初始化所有节点
-    for (int i = 0; i < nodeCount; i++) {
-        nodes.emplace_back(i, dim);
-        
-        // 设置邻居（每个维度的连接）
-        std::vector<int> neighbors;
-        for (int d = 0; d < dim; d++) {
-            int neighbor = i ^ (1 << d);
-            neighbors.push_back(neighbor);
+    initializeNodes(buff1, buff2);
+    connectNodes();
+}
+
+Hypercube::~Hypercube() {
+    for(int i = 0; i < nodeCount; i++) {
+        if(nodes[i] != NULL) {
+            delete nodes[i];
         }
-        nodes[i].setNeighbors(neighbors);
-        
-        // 设置缓冲区
-        nodes[i].setBuffer(bufferSize);
+    }
+    delete[] nodes;
+}
+
+void Hypercube::initializeNodes(int buff1, int buff2) {
+    for(int i = 0; i < nodeCount; i++) {
+        nodes[i] = new HypercubeNode();
+        nodes[i]->setCoordinate(i, dimension, i);
+        nodes[i]->setBuffer(buff1, buff2);
     }
 }
 
-Hypercube::~Hypercube() {}
-
-HypercubeNode* Hypercube::getNode(int address) {
-    if (address >= 0 && address < nodeCount) {
-        return &nodes[address];
+void Hypercube::connectNodes() {
+    for(int i = 0; i < nodeCount; i++) {
+        for(int d = 0; d < dimension; d++) {
+            // 计算在维度d上的相邻节点
+            int neighbor = i ^ (1 << d);
+            nodes[i]->linkNodes[d] = neighbor;
+        }
     }
-    return nullptr;
-}
-
-void Hypercube::clearAllBuffers() {
-    for (auto& node : nodes) {
-        node.clearBuffer();
-    }
-}
+} 
