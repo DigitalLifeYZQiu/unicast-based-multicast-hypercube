@@ -1,123 +1,240 @@
-//
-#include <iostream>
-#include <vector>
-#include <fstream>
-#include <map>
-#include <iomanip>
+/**********
+
+12/11/2007  Luo wei
+
+  *********************/
 #include "common.h"
-#include "Hypercube.h"
-#include "RoutingHypercube.h"
-#include "Event.h"
+#include <iostream>
+#include <cstdlib>
+#include <ctime>
 
-// 全局统计变量
-int messarrive = 0;               // 成功到达目的地的消息计数
-double total_latency = 0;         // 所有消息延迟总和（周期数）
-int allmess = 0;                  // 总生成消息计数
-int total_flits_delivered = 0;    // 成功传递的总flit数
-std::map<Message*, int> messageGenTime; // 记录消息生成时间
+int ALGORITHM;	//实现多个路由算法的时候执行的是哪一个，该程序只实现了一个，用于Routing.cpp中
+int GENERATETYPE;//用于选择linkrate的增长方式
+int flowalg;
+int totalcircle;//程序总的运行周期
+int dimension;  // 超立方体的维度
 
-// 运行单次模拟的函数
-void runSimulation(double injection_rate, std::ofstream& resultsFile) {
-    // 重置统计变量
-    messarrive = 0;
-    total_latency = 0;
-    allmess = 0;
-    total_flits_delivered = 0;
-    messageGenTime.clear();
+int getsize(vector<Message*>* mess);
 
-    int bufferSize = 16; // 每个缓冲区大小（以flit为单位）
-    int dimension=16;
-    // 创建超立方体网络
-    Hypercube cube(dimension, bufferSize * MESSLENGTH);
+int main()
+{	
+	srand(time(NULL));  // 初始化随机数生成器
+	
+	for(int allgen = 1; allgen < 2; allgen++){
+		int threshold = 10000;  // 增加阈值
+		HypercubeRouting* rout1 = NULL;
+		GENERATETYPE = allgen;
+		flowalg = 1;
+		totalcircle = 100000;  // 减少总周期数以加快模拟
+		dimension = 8;  // 4维超立方体
+		Hypercube* hypercube = NULL;
+		Event* s = NULL;
+		int r1, r2;
+		string gen[5] = {"0","1", "2", "3", "4"};
+		string filename[5] = {"data//gene4//Bubble Flow",
+						   "data//gene4//clue-WF",
+						   "data//gene4//clue-DOR",
+						   "data//gene4//FCclue-DOR",
+						   "data//gene4//FCclue-WF",
+							 };//结果的输出文件路径，因为以前实现了5种路由算法，所以这里有5个文件路径
 
-    // 创建路由算法
-    RoutingHypercube routing(&cube);
+		for(int lop=0; lop < 5; lop ++){;
+			filename[lop].replace(10, 1, gen[GENERATETYPE]);
+		}
 
-    // 创建事件处理器
-    Event event(&routing);
+		int r1buffer[5] = {1, 2, 1, 2, 2};//虚拟信道1缓存大小，以message个数为基本单位
+		int r2buffer[5] = {2, 1, 1, 1, 1};//虚拟信道2缓存大小，若无虚拟通道不使用r2
+		int alg[5] = {0, 1, 2, 1, 2};
 
-    // 消息队列
-    std::vector<Message*> messages;
+		/***
+		round = 2 : Dimension Order Routing，该程序只实现了xy路由，所以round的值不改变，只为2，循环只在实现多种路由算法时才有意义
+	 ***/
 
-    // 主循环
-    for (int cycle = 0; cycle < totalcircle; ++cycle) {
-        // 根据注入率生成新消息
-        // double gen_prob = injection_rate / MESSLENGTH;  // 将flit注入率转换为消息生成概率
-        double gen_prob = injection_rate;
-        if ((double)rand() / RAND_MAX < gen_prob) {
-            Message* newMsg = event.generateMessage();
-            if (newMsg) {
-                messages.push_back(newMsg);
-                messageGenTime[newMsg] = cycle;  // 记录生成时间
-                allmess++;
-            }
-        }
+		for(int round = 2 ; round < 3;round++){
+			ofstream out = ofstream(filename[round].c_str());
+					float linkrate = 0;
+					double max = 0;
 
-        // 处理消息
-        for (auto it = messages.begin(); it != messages.end(); ) {
-            Message* msg = *it;
-            event.forwardMessage(*msg);
+	/************************************************************************************
 
-            if (!msg->active) {  // 消息已到达目的地
-                // 计算并记录延迟
-                int genTime = messageGenTime[msg];
-                int latency = cycle - genTime;
-                total_latency += latency;
-                messarrive++;
+						start simulate
 
-                // 记录传递的flit数
-                total_flits_delivered += MESSLENGTH;
+  ***********************************************************************************/
+	//linkrate控制消息产生速率
+		for(linkrate = 0.01; linkrate < 1;){
 
-                // 从消息列表中移除
-                delete msg;
-                it = messages.erase(it);
-            } else {
-                ++it;
-            }
-        }
-    }
+					r1 = r1buffer[round] * MESSLENGTH;	//以flit个数为基本单位
+					r2 = r2buffer[round] * MESSLENGTH;
+			    	hypercube = new Hypercube(dimension, r1, r2); //初始化网络结构
 
-    // 计算性能指标
-    double avg_latency = (messarrive > 0) ? (total_latency / messarrive) : 0;////s->totalcir/s->messarrive 平均延迟的计算公式
 
-    double throughput = injection_rate * (float) messarrive / allmess;//linkrate * ((float) s->messarrive / allmess)吞吐量的计算公式
-    double traffic = (double)total_flits_delivered / totalcircle / cube.getNodeCount();
+					switch(round){
 
-    // 输出结果
-    std::cout << "Injection Rate: " << std::fixed << std::setprecision(4) << injection_rate
-              << " | Avg Latency: " << avg_latency << " | Throughput: " << throughput
-              << " | Traffic: " << traffic << " flits/node/cycle"
-              << " | Delivered: " << messarrive << "/" << allmess << " messages"
-              << std::endl;
+					case 1: case 2:
+					   ALGORITHM = alg[round];
+					   rout1 = new HypercubeRouting(hypercube);
+					   break;
+					}
 
-    // 写入结果文件
-    resultsFile << injection_rate << " " << avg_latency << " " << throughput << "\n";
 
-    // 清理剩余消息
-    for (auto msg : messages) {
-        delete msg;
-    }
+				  	s = new Event(rout1);
+
+
+			float msgpercir = (float)  (linkrate * 2 * dimension/ (MESSLENGTH * 10)) ;//每个周期每个节点产生的message数，还要除以10是因为allvecmess有10个元素
+			//saturationRate = (double)(knode * 2 * 2) / (double)(knode * knode); 在mesh网络中的饱和吞吐量
+			//msgpercir = linkrate * saturationRate * knode * knode; 每个周期每个节点产生的flit数
+		
+			vector<Message*> allvecmess[10];
+			float k = 0;
+			int allmess = 0;
+
+
+
+  	/************************************************************************************
+
+					genarate message
+
+  ***********************************************************************************/
+	//执行totalcircle个周期，getsize(allvecmess) < threshold只是自己加的限制条件，可以有也可以删除，具体的threshold和totalcircle值也可以在前面修改									
+			for(int i = 0; i < totalcircle && getsize(allvecmess) < threshold; i++){		
+				vector<Message*>& vecmess = allvecmess[ i % 10];
+				for(  k += msgpercir ; k > 0; k--){					
+								allmess++;//总的产生消息数加一
+							vecmess.push_back(s->genMes());//产生消息放入	allvecmess的某个元素中	
+				}
+
+
+	/************************************************************************************
+
+					release link
+
+  ***********************************************************************************/
+
+
+		for(vector<Message*>::iterator it = vecmess.begin(); it != vecmess.end(); it++){
+
+				/* if the tail of a message shifts , 
+				the physical link the message  occupied should release.				
+				  */
+
+			if((*it)->releaselink == true){ 
+			 	assert((*it)->routpath[MESSLENGTH - 1].buff->linkused);
+			 (*it)->routpath[MESSLENGTH - 1].buff->linkused = false;//释放链路					
+			 (*it)->releaselink = false;
+			}
+		}
+	
+
+
+
+	/************************************************************************************
+
+					forward message				
+
+  ***********************************************************************************/
+		for(vector<Message*>::iterator it = vecmess.begin(); it != vecmess.end();){
+			if((*it)->active == false){	  // when a message arrive at its destination, it is not active
+				delete (*it);
+				it = vecmess.erase(it);//消息到达目的节点，将它从vecmess中删除				
+			}
+			else
+				s->forwardMes(*(*it++));//调用Routing.cpp中函数转发消息								
+		}		
+	}
+
+
+
+
+/*****************************************************************************
+
+				output results
+  ****************************************************************************/
+
+	int size = getsize(allvecmess);
+
+
+//s->totalcir/s->messarrive 平均延迟的计算公式；linkrate * ((float) s->messarrive / allmess)吞吐量的计算公式
+	cout << endl << endl <<"linkrate:"<< linkrate<<"    arrive:  " << s->messarrive << "    in the network : "
+		<< size <<  endl << "average latency: " 
+		<< (s->totalcir/s->messarrive) << "  nomalized accepted traffic: "
+		<<  linkrate * ((float) s->messarrive / allmess) 
+		<<  endl << endl ;
+	  
+	out << linkrate * ((float) s->messarrive / allmess)  
+		<< " " << (s->totalcir/s->messarrive) << endl;
+
+
+
+
+
+	/************************************************************************************
+
+						whether arrive at saturation point
+
+  ***********************************************************************************/
+	if ( linkrate * ((float) s->messarrive / allmess) > max 
+		&&  ((linkrate * ((float) s->messarrive / allmess) - max)/ max) > 0.01
+		&& getsize(allvecmess) < threshold) 
+		max = linkrate * ((float) s->messarrive / allmess);
+
+
+	else {
+			cout << "Saturation point, drain......." << endl;
+			drain(allvecmess,hypercube,s);		
+			int size = 0;
+			for(int j = 0; j < 10; j++){
+				if(!allvecmess[j].empty()){
+					size += allvecmess[j].size();
+				}
+			}
+			cout << "in the network:      "  << size << endl;
+//			outtotest(allvecmess,tor);
+//			bufferleft(tor, knode);
+//			cout << "max:" << max << endl;
+			break;
+	}
+
+
+
+
+
+	/************************************************************************************
+                    clean
+  *******************************************************************************************/
+
+
+			for(int m = 0; m < 10; m++){
+				for(vector<Message*>::iterator it = allvecmess[m].begin();
+							it != allvecmess[m].end(); it++)
+					delete (*it);
+			}
+			delete rout1;
+			delete hypercube;
+			delete s;	
+
+
+			switch(GENERATETYPE){
+			case 1:	 				
+					if(linkrate < 0.5) linkrate += 0.05;
+					else  linkrate += 0.02;				
+					break;
+
+			case 2: case 3: 
+					if(linkrate < 0.3) linkrate += 0.1;
+					else linkrate += 0.02;
+					break;
+			case 4:
+					if(linkrate < 0.4) linkrate += 0.1;
+					else linkrate += 0.02;
+					break;
+
+
+			}
+				
+		 }   // each linkrate end
+	} // round end
+  }
+  return 1;
 }
 
-int main() {
-    // 打开结果文件
-    std::ofstream resultsFile("results.txt");
-    if (!resultsFile) {
-        std::cerr << "Error opening results file!" << std::endl;
-        return 1;
-    }
 
-    resultsFile << "InjectionRate AvgLatency Throughput\n";  // 文件头
-
-    // 测试不同的注入率 (0.01 到 1)
-    const int num_rates = 10;
-    const double max_rate = 1.0;
-
-    for (int i = 0; i <= num_rates; ++i) {
-        double injection_rate = (i * max_rate) / num_rates;
-        runSimulation(injection_rate, resultsFile);
-    }
-
-    resultsFile.close();
-    return 0;
-}
