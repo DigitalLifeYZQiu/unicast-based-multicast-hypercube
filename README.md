@@ -3,11 +3,15 @@
 > 姓名：邱云中
 >
 > 学号：2024213716
+
 ---
+
 ## 实验题目
+
 基于单播的多播超立方体路由（Unicast-Based-Multicast-for-Hypercubes）
 
 首先复习一下清华大学软件学院向东老师课件“集合通信 3”中关于超立方体多播路由算法的描述：(Page 58-60)
+
 - A sequence $d_1, d_2, \cdots, d_{m-1}$ of hypercube addresses is called a $d_0$-relative dimension-ordered chain if and only if $d_0 \oplus d_1, d_0 \oplus d_2, \cdots, d_0 \oplus d_{m-1} $.
 - The chain algorithm can be applied to the new address sequence.
 - A multicast communication in a 5-cube from the source 01010, and destinations {00111, 10100, 11101, 10010, 00001, 00000}.
@@ -17,13 +21,17 @@
 课件内容明确地指出了超立方体多播路由的底层逻辑，即通过节点 id 的异或判定路由链路。那么什么是基于单播的多播超立方体路由呢？我的理解是在确定了多播路由起点与若干终点后，使用单播的方式进行连接。从实现方法上看，可以使用树形结构模拟这一过程，先构建多播树，再基于维度顺序进行路由搜索。
 
 ---
+
 ## 实验复现
+
 我的实验环境如下：
+
 - Apple MacbookPro M3
 - CLion IDE
 - C++ 20
 
 本项目使用 CMake 编译运行。启动实验前，请保证 CMakeLists.txt 文件存在并配置正确。以下是我使用的 CMake 配置，仅供参考：
+
 ```cmake
 cmake_minimum_required(VERSION 3.25)
 project(unicast-based-multicast-hypercube)
@@ -40,12 +48,15 @@ add_executable(Simulator
         testfuc.cpp
         )
 ```
+
 ---
 
 ## 实验结果
 
 ### 程序运行结果
+
 程序运行结果如下：在注入率达到 0.85 时出现饱和点（每次运行可能模拟结果有些许不同）。
+
 ```text
 /Users/qiuyz24/CLionProjects/unicast-based-multicast-hypercubes/cmake-build-debug/Simulator
 
@@ -193,7 +204,9 @@ in the network:      827
 
 Process finished with exit code 1
 ```
+
 ### 可视化结果
+
 平均延时结果可视化结果如下：
 
 ![latency.png](pic/latency.png)
@@ -201,10 +214,13 @@ Process finished with exit code 1
 吞吐量可视化结果如下：
 
 ![throughput.png](pic/throughput.png)
+
 ---
 
 ## 实验细节
+
 ### 网络结构设计：
+
 - 使用 `Hypercube` 类表示超立方体网络结构，通过 `dimension` 参数定义维度
 - 每个节点通过 `HypercubeNode` 类实现，包含：
     - 节点坐标（`coordinate`）
@@ -212,6 +228,7 @@ Process finished with exit code 1
     - 虚拟通道支持（`r1`、`r2` 缓冲区）
 
 ### 路由机制：
+
 - 在 `HypercubeRouting` 类中实现路由算法：
     - `find_path()`: 计算源节点到目的节点的路由路径
     - `get_neighbors()`: 获取节点的邻居节点
@@ -219,18 +236,41 @@ Process finished with exit code 1
     - `forward_message()`: 实现消息转发
 
 #### 多播树构建 (`build_multicast_tree`):
+
 ```cpp
-void HypercubeRouting::build_multicast_tree(int source, const vector<int>& destinations) {
-    // 清空现有的多播路由表
+// 构建多播树
+void HypercubeRouting::build_multicast_tree(int source, const std::vector<int>& destinations) {
     multicast_routes.clear();
+    std::set<int> visited;
+    visited.insert(source);
     
-    // 为每个目的节点构建单播路径
-    for (int dest : destinations) {
-        vector<NodeInfo> path = find_path(source, dest);
-        multicast_routes[dest] = path;
+    // 使用广度优先搜索构建多播树
+    std::queue<int> q;
+    q.push(source);
+    
+    while (!q.empty() && visited.size() < destinations.size() + 1) {
+        int current = q.front();
+        q.pop();
+        
+        // 检查所有可能的目标节点
+        for (int dest : destinations) {
+            if (visited.find(dest) != visited.end()) continue;
+            
+            // 计算当前节点到目标节点的路径
+            std::vector<int> path = find_path(current, dest);
+            if (!path.empty()) {
+                // 将路径添加到多播路由表
+                for (size_t i = 0; i < path.size() - 1; i++) {
+                    multicast_routes[path[i]].push_back(path[i + 1]);
+                }
+                visited.insert(dest);
+                q.push(dest);
+            }
+        }
     }
 }
 ```
+
 1. 以源节点为根节点
 2. 对每个目的节点：
     - 使用 `find_path` 计算从源节点到该目的节点的路径
@@ -238,29 +278,42 @@ void HypercubeRouting::build_multicast_tree(int source, const vector<int>& desti
 3. 最终形成一棵以源节点为根的多播树
 
 #### 单播路径寻找 (`find_path`):
+
 ```cpp
-vector<NodeInfo> HypercubeRouting::find_path(int source, int dest) {
-    vector<NodeInfo> path;
-    int current = source;
+// 查找从源节点到目标节点的路径
+std::vector<int> HypercubeRouting::find_path(int source, int dest) {
+    std::vector<int> path;
+    std::queue<int> q;
+    std::map<int, int> parent;
+    std::set<int> visited;
     
-    // 获取源节点和目的节点的坐标
-    vector<int> source_coord = hypercube->get_node_coordinate(source);
-    vector<int> dest_coord = hypercube->get_node_coordinate(dest);
+    q.push(source);
+    visited.insert(source);
     
-    // 逐维进行路由
-    for (int dim = 0; dim < dimension; dim++) {
-        if (source_coord[dim] != dest_coord[dim]) {
-            // 在当前维度上需要改变
-            int next = get_neighbor(current, dim);
-            
-            // 创建路由信息
-            NodeInfo info;
-            info.node = next;
-            info.channel = dim;
-            info.buff = hypercube->get_node(next)->get_buffer(dim);
-            
-            path.push_back(info);
-            current = next;
+    while (!q.empty()) {
+        int current = q.front();
+        q.pop();
+        
+        if (current == dest) {
+            // 重建路径
+            int node = dest;
+            while (node != source) {
+                path.push_back(node);
+                node = parent[node];
+            }
+            path.push_back(source);
+            std::reverse(path.begin(), path.end());
+            return path;
+        }
+        
+        // 获取当前节点的邻居
+        std::vector<int> neighbors = get_neighbors(current);
+        for (int neighbor : neighbors) {
+            if (visited.find(neighbor) == visited.end()) {
+                visited.insert(neighbor);
+                parent[neighbor] = current;
+                q.push(neighbor);
+            }
         }
     }
     
@@ -281,38 +334,95 @@ vector<NodeInfo> HypercubeRouting::find_path(int source, int dest) {
         - 将信息添加到路径中
 
 #### 邻居节点获取 (`get_neighbor`):
+
 ```cpp
-int HypercubeRouting::get_neighbor(int node, int dimension) {
-    // 获取节点坐标
-    vector<int> coord = hypercube->get_node_coordinate(node);
+// 获取节点的邻居
+std::vector<int> HypercubeRouting::get_neighbors(int node) {
+    std::vector<int> neighbors;
+    int n = hypercube->getDimension();
     
-    // 在指定维度上翻转坐标
-    coord[dimension] = 1 - coord[dimension];
+    for (int i = 0; i < n; i++) {
+        int neighbor = node ^ (1 << i);
+        if (neighbor < hypercube->getNodeCount()) {
+            neighbors.push_back(neighbor);
+        }
+    }
     
-    // 将坐标转换回节点ID
-    return hypercube->get_node_id(coord);
+    return neighbors;
 }
 ```
 
 1. 获取当前节点的坐标
-2. 在指定维度上翻转坐标（0变1，1变0）
+2. 在指定维度上翻转坐标
 3. 将新坐标转换回节点ID
 
 #### 消息转发过程（`forward_message`）：
+
 ```cpp
-void HypercubeRouting::forward_message(Message* msg) {
-    // 获取消息的当前路由路径
-    vector<NodeInfo>& path = multicast_routes[msg->dest];
-    
-    // 检查缓冲区是否可用
-    if (path[msg->current_hop].buff->bufferMin()) {
-        // 更新消息状态
-        msg->current_hop++;
-        msg->routpath[msg->current_hop] = path[msg->current_hop];
-        
-        // 更新缓冲区状态
-        path[msg->current_hop].buff->bufferPlus();
+// 转发消息到下一跳节点
+NodeInfo* HypercubeRouting::forward(Message& s) {
+    next->node = -1;
+    next->buff = NULL;
+
+    int curNode = s.routpath[0].node;
+    int dstNode = s.dst;
+
+    if(curNode == dstNode) {
+        return next;
     }
+
+    // 获取下一个维度
+    int nextDim = getNextDimension(curNode, dstNode);
+    if(nextDim == -1) {
+        return next;
+    }
+
+    // 获取当前节点的所有链路
+    Buffer** links = (*hypercube)[curNode]->links;
+    int* linkNodes = (*hypercube)[curNode]->linkNodes;
+
+    // 选择最佳链路
+    int chn = R1;  // 默认使用R1通道
+    Buffer* record = NULL;
+
+    // 首先尝试在目标维度上路由
+    if(checkBuffer(links[nextDim], chn, record)) {
+        next->node = linkNodes[nextDim];
+        next->channel = chn;
+        next->buff = record;
+        return next;
+    }
+
+    // 如果目标维度不可用，尝试其他维度
+    for(int d = 0; d < dimension; d++) {
+        if(d != nextDim && checkBuffer(links[d], chn, record)) {
+            next->node = linkNodes[d];
+            next->channel = chn;
+            next->buff = record;
+            return next;
+        }
+    }
+
+    // 如果R1通道都不可用，尝试R2通道
+    chn = R2;
+    if(checkBuffer(links[nextDim], chn, record)) {
+        next->node = linkNodes[nextDim];
+        next->channel = chn;
+        next->buff = record;
+        return next;
+    }
+
+    // 最后尝试其他维度的R2通道
+    for(int d = 0; d < dimension; d++) {
+        if(d != nextDim && checkBuffer(links[d], chn, record)) {
+            next->node = linkNodes[d];
+            next->channel = chn;
+            next->buff = record;
+            return next;
+        }
+    }
+
+    return next;
 }
 ```
 
@@ -325,18 +435,21 @@ void HypercubeRouting::forward_message(Message* msg) {
 
 
 ### 消息处理：
+
 - `Message` 类表示网络中的消息：
     - 包含源节点、目的节点信息
     - 存储路由路径（`routpath`）
     - 记录消息状态（`active`、`releaselink`等）
 
 ### 事件处理：
+
 - `Event` 类处理消息的生成和转发：
     - `genMes()`: 生成新消息
     - `forwardMes()`: 处理消息转发
     - 管理消息的生命周期
 
 ### 性能模拟：
+
 - 在 `main.cpp` 中实现性能模拟：
     - 支持不同的流量模式（`GENERATETYPE`）
     - 可配置的缓冲区大小（`r1buffer`、`r2buffer`）
@@ -344,9 +457,11 @@ void HypercubeRouting::forward_message(Message* msg) {
 
 
 ## 其他问题讨论
+
 **Q：基于单播的多播超立方体路由饱和点是否可以避免？**
 
 A：当将网络大小从 8 维增加到 16 维后，饱和点消失。运行结果如下：
+
 ```text
 /Users/qiuyz24/CLionProjects/unicast-based-multicast-hypercubes/cmake-build-debug/Simulator
 
